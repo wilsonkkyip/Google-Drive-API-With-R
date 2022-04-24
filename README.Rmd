@@ -1,0 +1,86 @@
+---
+title: "Using Google Drive API with R"
+output: github_document
+---
+
+## Introduction
+
+This document aims to introduce how to use [Google Drive API](https://developers.google.com/drive/api) with R. Readers should first [create a service account](https://cloud.google.com/docs/authentication/production) and acquire the JSON key for authentication before reading this document. Below will cover how to authenticate using the service account JSON via R and demonstrate the download and upload methods. 
+
+## Authentication
+
+```{r}
+# https://developers.google.com/drive/api/v3/reference/files/get
+scopes <- c(
+  "https://www.googleapis.com/auth/drive",
+  "https://www.googleapis.com/auth/drive.file",
+  "https://www.googleapis.com/auth/drive.readonly",
+  "https://www.googleapis.com/auth/drive.metadata.readonly",
+  "https://www.googleapis.com/auth/drive.appdata",
+  "https://www.googleapis.com/auth/drive.metadata",
+  "https://www.googleapis.com/auth/drive.photos.readonly"
+)
+
+endpoints <- httr::oauth_endpoints("google")
+secrets <- jsonlite::fromJSON("./serviceAccountKey.json")
+
+# https://www.rdocumentation.org/packages/httr/versions/1.4.2/topics/oauth_service_token
+oauth_token <- httr::oauth_service_token(
+  endpoint = endpoints,
+  secrets = secrets,
+  scope = scopes
+)
+```
+
+## Download Files
+
+Access the file without authentication. 
+
+```{r}
+fileId <- "1_zeJqQP8umrTk-evSAt3wCLxAkTKo0lC"
+url <- sprintf("https://www.googleapis.com/drive/v3/files/%s?alt=media", fileId)
+httr::GET(url)
+```
+
+Access the file with authentication. 
+
+```{r}
+httr::GET(url, oauth_token)
+```
+
+Saving the file. 
+
+```{r}
+httr::GET(url, oauth_token, httr::write_disk("/tmp/tmp.zip", overwrite = TRUE))
+```
+
+## Uploading Files
+
+To upload files to Google Drive via the API, the `POST` method will be used. The request body is put in a `metadata.json` as seen below. The keys can be found from the [API document](https://developers.google.com/drive/api/v3/reference/files/create).
+
+```{bash}
+cat metadata.json
+```
+
+The script below uploads the downloaded zip file to another folder in Google Drive. 
+
+```{r}
+# https://stackoverflow.com/questions/31080363/how-to-post-multipart-related-content-with-httr-for-google-drive-api
+url <- "https://www.googleapis.com/upload/drive/v3/files"
+
+body <- list(
+  metadata = httr::upload_file("./metadata.json", type = "application/json; charset=UTF-8"),
+  media = httr::upload_file("/tmp/tmp.zip", type = "application/x-zip-compressed")
+)
+
+httr::POST(
+  url = url,
+  body = body,
+  oauth_token
+)
+```
+
+
+
+
+
